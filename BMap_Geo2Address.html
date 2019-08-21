@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>百度地图坐标←→地址</title>
+<script type="text/javascript" src="https://api.map.baidu.com/api?v=2.0&ak=IyaZjfGZlGorlCGrq5uD7rP4hOYngmWN"></script>
+<style type="text/css">
+body{background-color:#615e5e;background-size:cover;background-attachment:fixed;font-family:Ubuntu,sans-serif}
+.main{padding:1% 10%;color:#d8dfe9;text-align:left;font-size:15px;line-height:1.4em}
+.main a{margin:0% 42% 3%;color:#cdc9f1;text-align:center;font-size:1em}
+.main h1{margin:1% 20% 1%;color:#fff;text-align:center;font-weight:400;font-size:1.6em}
+.main input[type=button]{margin:.5em 0.1em;padding:.6em .8em;outline:0;border:none;background:#1a498c;color:#fff;text-transform:capitalize;font-size:1em;font-family:Ubuntu,sans-serif;cursor:pointer}
+.main select{position:relative;padding:0 10px;width:150px;height:2pc;border:1px solid #ccc;line-height:2pc}
+.main textarea{width:100%;height:30%;}
+</style>
+</head>
+<body>
+<div class="main">
+<h1>百度地图坐标、地址转换</h1>
+<a href=".\AMap_Geo2Address.html">高德系坐标</a>
+<textArea rows="10" cols="10"  id="coordinates_input" placeholder="按行输入坐标"></textArea>
+</br>
+<input type="button" value="坐标→地址" onclick="coord_addr()" />
+</br>
+<p>WGS84: GPS设备获取的大地坐标;</p>
+<p>GCJ02: google、soso、aliyun、mapabc、amap所用坐标;</p>
+<p>BD09: baidu坐标;</p>
+<select id="WGS84">
+	<option value=0>WGS84→BD09</option>
+	<option value=1>GCJ02→BD09</option>
+	<option value=2 selected>Lng,Lat对调</option>
+</select>
+<input type="button" value="坐标系转换" onclick="coord_convert()" />
+</br></br>
+<textArea rows="10" cols="10" id="address_input" placeholder="按行输入地址"></textArea>
+</br>
+<input type="button" value="地址→坐标" onclick="addr_coord()" />
+<input type="button" value="复制结果" style="float:right;" onclick="copy_result()"/>
+<input type="button" value="清空结果" style="float:right;" onclick="javascript:document.getElementById('result').innerHTML='';"/>
+<div id="copy_success" style="display:none;float:right;padding-top:1em;" >复制成功</div>
+<div id="result"></div>
+</div>
+</body>
+</html>
+<script type="text/javascript">
+var index = 0;
+var myGeo = new BMap.Geocoder();
+var coordinates = [];
+var addrs = [];
+var inner_html=document.getElementById("coordinates_input");
+var result_html=document.getElementById("result");
+
+function copy_result(){
+	var hidden_text = document.createElement('textarea');
+	hidden_text.value = result_html.innerHTML.replace(/<br>/gi,'\n');
+	hidden_text.id = 'copy_to_clipboard';
+	document.body.appendChild(hidden_text);
+	var el = document.getElementById('copy_to_clipboard');
+	el.select();
+	document.execCommand('copy');
+	document.getElementById('copy_success').style.display ='';
+	setTimeout(()=>{document.getElementById('copy_success').style.display = 'none';},1000);
+	document.body.removeChild(el)
+}
+//坐标转换完之后的回调函数
+translateCallback = function (data){
+	return new Promise((resolve)=>{
+	   if(data.status === 0){
+        for (var i = 0; i < data.points.length; i++)
+           result_html.innerHTML+=data.points[i].lng+','+data.points[i].lat+'</br>';
+		resolve();
+		}
+	})
+}
+//API限制，每次只能转换10个坐标系，分割inner_html内数据
+function separate_array(){
+	var coord_input=inner_html.value.split("\n");
+	for(var i=0;i<coord_input.length;i++){
+		var xx=coord_input[i].split(',');
+		if(xx[0]){
+			var j=new BMap.Point(xx[0]*1,xx[1]*1);
+			coordinates.push(j);
+		}
+	}
+	var array_of_10=[];
+	for(i=0;i<coordinates.length;i+=10)
+		array_of_10.push(coordinates.slice(i,i+10));//每次只能转换10个
+	return array_of_10;
+}
+//调用BMap.Convertor，mode 1为WGS84；3为GCJ02；5为BD09
+function convert_constructor(mode,array_of_10,i){
+	var convertor = new BMap.Convertor();
+	convertor.translate(array_of_10[i], mode, 5, (data)=>{
+		const promise=translateCallback(data)
+					.then(()=>{
+						if(++i<array_of_10.length)
+							convert_constructor(mode,array_of_10,i);
+						})
+	});
+}
+
+//下拉框
+function coord_convert(){
+	coordinates.splice(0,coordinates.length);	
+	switch(WGS84.value*1){
+		case 0:
+			convert_constructor(1,separate_array(),0);		
+			break;
+		case 1:
+			convert_constructor(3,separate_array(),0);	
+			break;
+		case 2:
+			var coord_input=inner_html.value.split("\n");
+			for(var i=0;i<coord_input.length;i++){
+				var xx=coord_input[i].split(',');
+				var j=[xx[1]*1,xx[0]*1];
+				coordinates.push(j);
+			}
+			for(var j in coordinates)
+				result_html.innerHTML+=coordinates[j].toString()+'</br>';
+			break;
+		default: break;
+	}
+}
+//坐标→地址
+function coord_addr(){
+	coordinates.splice(0,coordinates.length);
+	var coord_input=document.getElementById("coordinates_input").value.split("\n");
+	for(var i=0;i<coord_input.length;i++){
+		var xx=coord_input[i].split(',');
+		var j=new BMap.Point(xx[0]*1,xx[1]*1);
+		coordinates.push(j);
+	}
+	bdGEO(index=0);	
+}
+//坐标→地址，顺序获取address
+function bdGEO(kk) {
+	if(kk>=coordinates.length) return;	
+	geocodeSearch(coordinates[kk])
+		.then(bdGEO);
+}
+//地址→坐标
+function addr_coord(){
+	addrs.splice(0,addrs.length);
+	var addr_input=document.getElementById("address_input").value.split("\n");
+	for(var i=0;i<addr_input.length;i++)
+		addrs.push(addr_input[i]);	
+	bdAddr(index=0);	
+}
+//地址→坐标，顺序获取coordinate
+function bdAddr(kk) {
+	if(kk>=addrs.length) return;
+	geocoordSearch(addrs[kk])
+		.then(bdAddr);
+}
+//坐标→地址 BMap.Geocoder.getLocation
+function geocodeSearch(pt) {
+	return new Promise((resolve,reject)=>{
+		myGeo.getLocation(pt, function (rs) {
+			result_html.innerHTML += coordinates[index].lng + "," + coordinates[index].lat + "：" + rs.address + "</br>";
+			resolve(++index);//传递参数给.then()
+		});
+	})
+	
+}
+//地址→坐标 BMap.Geocoder.getLocation
+function geocoordSearch(pt) {
+	return new Promise((resolve,reject) => {
+		myGeo.getPoint(pt, function (point) {
+			if (point) 
+				result_html.innerHTML += addrs[index] + ": " + point.lng + "," + point.lat + "</br>";			
+			resolve(++index);//传递参数给.then()
+		});	
+	})	
+}
+</script>
